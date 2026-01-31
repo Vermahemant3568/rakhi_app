@@ -331,6 +331,93 @@ class ApiClient {
     }
   }
 
+  // Voice API method
+  static Future<ApiResponse> startVoiceCall() async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      
+      if (_authToken != null) {
+        headers['Authorization'] = 'Bearer $_authToken';
+      }
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/voice/start'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 30));
+      
+      Map<String, dynamic> data;
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          data = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          data = {'error': 'Invalid response format'};
+        }
+      } else {
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          data = {'error': errorData['message'] ?? 'Failed to start voice call'};
+        } catch (e) {
+          data = {'error': _getErrorMessage(response.statusCode)};
+        }
+      }
+      
+      return ApiResponse(statusCode: response.statusCode, data: data);
+    } catch (e) {
+      return ApiResponse(
+        statusCode: 500, 
+        data: {'error': 'Network error. Please check your connection.'}
+      );
+    }
+  }
+
+  // Chat API method
+  static Future<ApiResponse> sendChatMessage(String message) async {
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      
+      if (_authToken != null) {
+        headers['Authorization'] = 'Bearer $_authToken';
+      }
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/chat/send'),
+        headers: headers,
+        body: jsonEncode({'message': message}),
+      ).timeout(const Duration(seconds: 30));
+      
+      Map<String, dynamic> data;
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          data = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          data = {'error': 'Invalid response format'};
+        }
+      } else {
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          data = {'error': errorData['message'] ?? 'Failed to send message'};
+        } catch (e) {
+          data = {'error': _getErrorMessage(response.statusCode)};
+        }
+      }
+      
+      return ApiResponse(statusCode: response.statusCode, data: data);
+    } catch (e) {
+      return ApiResponse(
+        statusCode: 500, 
+        data: {'error': 'Network error. Please check your connection.'}
+      );
+    }
+  }
+
   // Payment API methods
   static Future<ApiResponse> createTrialOrder() async {
     try {
