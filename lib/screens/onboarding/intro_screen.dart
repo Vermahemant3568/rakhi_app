@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:rakhi_app/core/constants/app_colors.dart';
-import 'package:rakhi_app/screens/auth/mobile_number_screen.dart';
+import 'package:rakhi_app/screens/onboarding/language_selection_screen.dart';
 
-class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key});
+class IntroScreen extends StatelessWidget {
+  const IntroScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -20,10 +20,8 @@ class WelcomeScreen extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Spacer(),
-                // App Icon/Logo
                 Container(
                   width: 120,
                   height: 120,
@@ -45,28 +43,27 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 40),
-                // App Title
                 const Text(
-                  'Rakhi AI',
+                  'Meet Rakhi',
                   style: TextStyle(
-                    fontSize: 36,
+                    fontSize: 32,
                     fontWeight: FontWeight.bold,
                     color: AppColors.textWhite,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 16),
                 const Text(
-                  'Health Coach',
+                  'Your AI Health Companion',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w300,
+                    fontSize: 18,
                     color: AppColors.textWhite70,
+                    height: 1.5,
                   ),
                 ),
                 const SizedBox(height: 24),
-                // Description
                 const Text(
-                  'Your personal AI companion for a healthier lifestyle. Get personalized health insights and guidance.',
+                  'I\'m here to help you on your wellness journey with personalized health insights and guidance.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -75,7 +72,6 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                // Get Started Button
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -84,7 +80,7 @@ class WelcomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MobileNumberScreen(),
+                          builder: (context) => const LanguageSelectionScreen(),
                         ),
                       );
                     },
@@ -103,16 +99,6 @@ class WelcomeScreen extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Terms and Privacy
-                const Text(
-                  'By continuing, you agree to our Terms of Service and Privacy Policy',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textWhite60,
                   ),
                 ),
                 const SizedBox(height: 32),

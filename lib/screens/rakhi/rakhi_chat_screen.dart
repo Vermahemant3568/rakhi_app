@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../core/constants/app_colors.dart';
+import 'package:rakhi_app/core/constants/app_colors.dart';
 
-class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key});
+class RakhiChatScreen extends StatelessWidget {
+  const RakhiChatScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +18,7 @@ class ChatScreen extends StatelessWidget {
         child: const SafeArea(
           child: Center(
             child: Text(
-              'Chat Screen\n(Already Onboarded)',
+              'Rakhi Chat Interface\n(Health Coach)',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 24,
