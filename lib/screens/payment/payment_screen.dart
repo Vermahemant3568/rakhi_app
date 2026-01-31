@@ -20,30 +20,69 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
     try {
       if (widget.isTrial) {
-        final response = await ApiClient.startTrial();
-        if (response.statusCode == 200) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const RakhiChatScreen()),
-          );
+        // Trial payment flow
+        final orderResponse = await ApiClient.createTrialOrder();
+        if (orderResponse.statusCode == 200) {
+          await _simulateRazorpayPayment(orderResponse.data);
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to start trial')),
-          );
+          _showError(orderResponse.data['error'] ?? 'Failed to create order');
         }
       } else {
-        // TODO: Handle subscription payment
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Subscription payment not implemented')),
-        );
+        // Subscription payment flow
+        final subscriptionResponse = await ApiClient.createSubscription();
+        if (subscriptionResponse.statusCode == 200) {
+          await _simulateRazorpaySubscription(subscriptionResponse.data);
+        } else {
+          _showError(subscriptionResponse.data['error'] ?? 'Failed to create subscription');
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Payment failed')),
-      );
+      _showError('Payment failed. Please try again.');
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _simulateRazorpayPayment(Map<String, dynamic> orderData) async {
+    final paymentData = {
+      'razorpay_order_id': orderData['order_id'] ?? 'order_test_123',
+      'razorpay_payment_id': 'pay_test_123',
+      'razorpay_signature': 'signature_test_123',
+    };
+
+    final verifyResponse = await ApiClient.verifyTrialPayment(paymentData);
+    if (verifyResponse.statusCode == 200) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const RakhiChatScreen()),
+      );
+    } else {
+      _showError(verifyResponse.data['error'] ?? 'Payment verification failed');
+    }
+  }
+
+  Future<void> _simulateRazorpaySubscription(Map<String, dynamic> subscriptionData) async {
+    final verificationData = {
+      'razorpay_subscription_id': subscriptionData['subscription_id'] ?? 'sub_test_123',
+      'razorpay_payment_id': 'pay_test_123',
+      'razorpay_signature': 'signature_test_123',
+    };
+
+    final verifyResponse = await ApiClient.verifySubscription(verificationData);
+    if (verifyResponse.statusCode == 200) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const RakhiChatScreen()),
+      );
+    } else {
+      _showError(verifyResponse.data['error'] ?? 'Subscription verification failed');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
   @override
@@ -63,10 +102,13 @@ class _PaymentScreenState extends State<PaymentScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 40),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.arrow_back, color: AppColors.white),
-                  alignment: Alignment.centerLeft,
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back, color: AppColors.white),
+                    ),
+                  ],
                 ),
                 const Spacer(),
                 Container(
@@ -76,15 +118,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     color: AppColors.white,
                     borderRadius: BorderRadius.circular(25),
                   ),
-                  child: const Icon(
-                    Icons.payment,
+                  child: Icon(
+                    widget.isTrial ? Icons.timer : Icons.subscriptions,
                     size: 50,
                     color: AppColors.primary,
                   ),
                 ),
                 const SizedBox(height: 40),
                 Text(
-                  widget.isTrial ? 'Start Your Trial' : 'Subscribe Now',
+                  widget.isTrial ? 'Start 7-Day Trial' : 'Continue Rakhi Premium',
                   style: const TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -93,20 +135,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  widget.isTrial ? '₹7 Trial' : '₹299 Autopay',
+                  widget.isTrial ? '₹7 now, ₹299/month after trial' : '₹299/month, auto-pay',
                   style: const TextStyle(
-                    fontSize: 36,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textWhite,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  widget.isTrial 
-                      ? '7 days trial period'
-                      : 'Monthly subscription',
-                  style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     color: AppColors.textWhite70,
                   ),
                 ),
@@ -127,7 +158,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     child: _isLoading
                         ? const CircularProgressIndicator(color: AppColors.primary)
                         : Text(
-                            widget.isTrial ? 'Start Trial' : 'Subscribe',
+                            widget.isTrial ? 'Pay ₹7' : 'Subscribe',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
