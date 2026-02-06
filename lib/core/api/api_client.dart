@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiResponse {
   final int statusCode;
@@ -14,9 +15,41 @@ class ApiClient {
   
   static String get baseUrl {
     if (kIsWeb) {
-      return 'http://10.125.101.16:8000/api';
+      return 'http://10.159.117.16:8000/api';
     } else {
-      return 'http://10.0.2.2:8000/api';
+      // Use actual system IP instead of emulator-only 10.0.2.2
+      return 'http://10.159.117.16:8000/api';
+    }
+  }
+
+  static Future<Map<String, String>> _getHeaders({bool requireAuth = false}) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    
+    if (requireAuth && _authToken != null) {
+      headers['Authorization'] = 'Bearer $_authToken';
+    }
+    
+    return headers;
+  }
+
+  static Future<void> _saveToken(String token) async {
+    _authToken = token;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('auth_token', token);
+  }
+
+  static Future<void> _loadToken() async {
+    if (_authToken == null) {
+      final prefs = await SharedPreferences.getInstance();
+      _authToken = prefs.getString('auth_token');
+    }
+    // Debug: Print token status
+    print('DEBUG: Token loaded: ${_authToken != null ? "YES" : "NO"}');
+    if (_authToken != null) {
+      print('DEBUG: Token: ${_authToken!.substring(0, 10)}...');
     }
   }
 
@@ -40,10 +73,12 @@ class ApiClient {
           data = {'error': 'Invalid response format'};
         }
       } else {
+        // Try to parse error response
         try {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
           data = {'error': errorData['message'] ?? 'Server error occurred'};
         } catch (e) {
+          // If HTML or non-JSON response
           data = {'error': _getErrorMessage(response.statusCode)};
         }
       }
@@ -61,30 +96,20 @@ class ApiClient {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/verify-otp'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: await _getHeaders(),
         body: jsonEncode({'mobile': mobile, 'otp': otp}),
       ).timeout(const Duration(seconds: 30));
-      
-      print('DEBUG: OTP verification response code: ${response.statusCode}');
-      print('DEBUG: OTP verification response body: ${response.body}');
       
       Map<String, dynamic> data;
       
       if (response.statusCode == 200 || response.statusCode == 201) {
         try {
           data = jsonDecode(response.body) as Map<String, dynamic>;
-          // Store token from response - check nested data object
-          if (data['data'] != null && data['data']['token'] != null) {
-            _authToken = data['data']['token'];
-            print('DEBUG: Token stored: $_authToken');
-          } else {
-            print('DEBUG: No token in response');
+          // Save auth token if provided in nested data structure
+          if (data.containsKey('data') && data['data'].containsKey('token')) {
+            await _saveToken(data['data']['token']);
           }
         } catch (e) {
-          print('DEBUG: JSON decode error: $e');
           data = {'error': 'Invalid response format'};
         }
       } else {
@@ -107,28 +132,11 @@ class ApiClient {
 
   static Future<ApiResponse> getAppStatus() async {
     try {
-      print('DEBUG: Current token: $_authToken');
-      
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      // Add auth token if available
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-        print('DEBUG: Added Authorization header');
-      } else {
-        print('DEBUG: No token available');
-      }
-      
+      await _loadToken(); // Ensure token is loaded
       final response = await http.get(
         Uri.parse('$baseUrl/app/status'),
-        headers: headers,
+        headers: await _getHeaders(requireAuth: true),
       ).timeout(const Duration(seconds: 30));
-      
-      print('DEBUG: App status response code: ${response.statusCode}');
-      print('DEBUG: App status response body: ${response.body}');
       
       Map<String, dynamic> data;
       
@@ -158,18 +166,12 @@ class ApiClient {
 
   static Future<ApiResponse> startTrial() async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
       final response = await http.post(
         Uri.parse('$baseUrl/subscription/start-trial'),
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       ).timeout(const Duration(seconds: 30));
       
       Map<String, dynamic> data;
@@ -200,18 +202,12 @@ class ApiClient {
 
   static Future<ApiResponse> getLanguages() async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
       final response = await http.get(
         Uri.parse('$baseUrl/languages'),
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       ).timeout(const Duration(seconds: 30));
       
       Map<String, dynamic> data;
@@ -242,18 +238,12 @@ class ApiClient {
 
   static Future<ApiResponse> getGoals() async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
       final response = await http.get(
         Uri.parse('$baseUrl/goals'),
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
       ).timeout(const Duration(seconds: 30));
       
       Map<String, dynamic> data;
@@ -284,25 +274,14 @@ class ApiClient {
 
   static Future<ApiResponse> submitOnboarding(Map<String, dynamic> data) async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
-      print('DEBUG: Submitting onboarding data: $data');
-      
       final response = await http.post(
         Uri.parse('$baseUrl/onboarding/submit'),
-        headers: headers,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: jsonEncode(data),
       ).timeout(const Duration(seconds: 30));
-      
-      print('DEBUG: Onboarding response code: ${response.statusCode}');
-      print('DEBUG: Onboarding response body: ${response.body}');
       
       Map<String, dynamic> responseData;
       
@@ -323,7 +302,6 @@ class ApiClient {
       
       return ApiResponse(statusCode: response.statusCode, data: responseData);
     } catch (e) {
-      print('DEBUG: Onboarding submission error: $e');
       return ApiResponse(
         statusCode: 500, 
         data: {'error': 'Network error. Please check your connection.'}
@@ -331,22 +309,163 @@ class ApiClient {
     }
   }
 
-  // Voice API method
-  static Future<ApiResponse> startVoiceCall() async {
+  static Future<ApiResponse> createTrialOrder(Map<String, dynamic> data) async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
+      final response = await http.post(
+        Uri.parse('$baseUrl/payment/create-trial-order'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 30));
       
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
+      Map<String, dynamic> responseData;
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          responseData = {'error': 'Invalid response format'};
+        }
+      } else {
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          responseData = {'error': errorData['message'] ?? 'Failed to create trial order'};
+        } catch (e) {
+          responseData = {'error': _getErrorMessage(response.statusCode)};
+        }
       }
       
+      return ApiResponse(statusCode: response.statusCode, data: responseData);
+    } catch (e) {
+      return ApiResponse(
+        statusCode: 500, 
+        data: {'error': 'Network error. Please check your connection.'}
+      );
+    }
+  }
+
+  static Future<ApiResponse> createSubscription(Map<String, dynamic> data) async {
+    try {
       final response = await http.post(
-        Uri.parse('$baseUrl/voice/start'),
-        headers: headers,
+        Uri.parse('$baseUrl/payment/create-subscription'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(data),
       ).timeout(const Duration(seconds: 30));
+      
+      Map<String, dynamic> responseData;
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          responseData = {'error': 'Invalid response format'};
+        }
+      } else {
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          responseData = {'error': errorData['message'] ?? 'Failed to create subscription'};
+        } catch (e) {
+          responseData = {'error': _getErrorMessage(response.statusCode)};
+        }
+      }
+      
+      return ApiResponse(statusCode: response.statusCode, data: responseData);
+    } catch (e) {
+      return ApiResponse(
+        statusCode: 500, 
+        data: {'error': 'Network error. Please check your connection.'}
+      );
+    }
+  }
+
+  static Future<ApiResponse> verifyTrialPayment(Map<String, dynamic> data) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/payment/verify-trial'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 30));
+      
+      Map<String, dynamic> responseData;
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          responseData = {'error': 'Invalid response format'};
+        }
+      } else {
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          responseData = {'error': errorData['message'] ?? 'Failed to verify trial payment'};
+        } catch (e) {
+          responseData = {'error': _getErrorMessage(response.statusCode)};
+        }
+      }
+      
+      return ApiResponse(statusCode: response.statusCode, data: responseData);
+    } catch (e) {
+      return ApiResponse(
+        statusCode: 500, 
+        data: {'error': 'Network error. Please check your connection.'}
+      );
+    }
+  }
+
+  static Future<ApiResponse> verifySubscription(Map<String, dynamic> data) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/payment/verify-subscription'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(data),
+      ).timeout(const Duration(seconds: 30));
+      
+      Map<String, dynamic> responseData;
+      
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        try {
+          responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        } catch (e) {
+          responseData = {'error': 'Invalid response format'};
+        }
+      } else {
+        try {
+          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
+          responseData = {'error': errorData['message'] ?? 'Failed to verify subscription'};
+        } catch (e) {
+          responseData = {'error': _getErrorMessage(response.statusCode)};
+        }
+      }
+      
+      return ApiResponse(statusCode: response.statusCode, data: responseData);
+    } catch (e) {
+      return ApiResponse(
+        statusCode: 500, 
+        data: {'error': 'Network error. Please check your connection.'}
+      );
+    }
+  }
+
+  static Future<ApiResponse> uploadImage(String imagePath) async {
+    try {
+      await _loadToken();
+      var request = http.MultipartRequest('POST', Uri.parse('$baseUrl/chat/upload-image'));
+      request.headers.addAll(await _getHeaders(requireAuth: true));
+      request.files.add(await http.MultipartFile.fromPath('image', imagePath));
+      
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse);
       
       Map<String, dynamic> data;
       
@@ -359,7 +478,7 @@ class ApiClient {
       } else {
         try {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-          data = {'error': errorData['message'] ?? 'Failed to start voice call'};
+          data = {'error': errorData['message'] ?? 'Failed to upload image'};
         } catch (e) {
           data = {'error': _getErrorMessage(response.statusCode)};
         }
@@ -374,42 +493,36 @@ class ApiClient {
     }
   }
 
-  // Chat API method
-  static Future<ApiResponse> sendChatMessage(String message) async {
+  static Future<ApiResponse> sendChatMessage(String message, {int? imageId}) async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
+      await _loadToken();
+      final body = {'message': message};
+      if (imageId != null) body['image_id'] = imageId.toString();
       
       final response = await http.post(
         Uri.parse('$baseUrl/chat/send'),
-        headers: headers,
-        body: jsonEncode({'message': message}),
+        headers: await _getHeaders(requireAuth: true),
+        body: jsonEncode(body),
       ).timeout(const Duration(seconds: 30));
       
-      Map<String, dynamic> data;
+      Map<String, dynamic> responseData;
       
       if (response.statusCode == 200 || response.statusCode == 201) {
         try {
-          data = jsonDecode(response.body) as Map<String, dynamic>;
+          responseData = jsonDecode(response.body) as Map<String, dynamic>;
         } catch (e) {
-          data = {'error': 'Invalid response format'};
+          responseData = {'error': 'Invalid response format'};
         }
       } else {
         try {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-          data = {'error': errorData['message'] ?? 'Failed to send message'};
+          responseData = {'error': errorData['message'] ?? 'Failed to send message'};
         } catch (e) {
-          data = {'error': _getErrorMessage(response.statusCode)};
+          responseData = {'error': _getErrorMessage(response.statusCode)};
         }
       }
       
-      return ApiResponse(statusCode: response.statusCode, data: data);
+      return ApiResponse(statusCode: response.statusCode, data: responseData);
     } catch (e) {
       return ApiResponse(
         statusCode: 500, 
@@ -418,41 +531,35 @@ class ApiClient {
     }
   }
 
-  // Payment API methods
-  static Future<ApiResponse> createTrialOrder() async {
+  static Future<ApiResponse> startVoiceCall(Map<String, dynamic> data) async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
       final response = await http.post(
-        Uri.parse('$baseUrl/payment/trial/order'),
-        headers: headers,
+        Uri.parse('$baseUrl/voice/start-call'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode(data),
       ).timeout(const Duration(seconds: 30));
       
-      Map<String, dynamic> data;
+      Map<String, dynamic> responseData;
       
       if (response.statusCode == 200 || response.statusCode == 201) {
         try {
-          data = jsonDecode(response.body) as Map<String, dynamic>;
+          responseData = jsonDecode(response.body) as Map<String, dynamic>;
         } catch (e) {
-          data = {'error': 'Invalid response format'};
+          responseData = {'error': 'Invalid response format'};
         }
       } else {
         try {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-          data = {'error': errorData['message'] ?? 'Failed to create trial order'};
+          responseData = {'error': errorData['message'] ?? 'Failed to start voice call'};
         } catch (e) {
-          data = {'error': _getErrorMessage(response.statusCode)};
+          responseData = {'error': _getErrorMessage(response.statusCode)};
         }
       }
       
-      return ApiResponse(statusCode: response.statusCode, data: data);
+      return ApiResponse(statusCode: response.statusCode, data: responseData);
     } catch (e) {
       return ApiResponse(
         statusCode: 500, 
@@ -461,21 +568,12 @@ class ApiClient {
     }
   }
 
-  static Future<ApiResponse> verifyTrialPayment(Map<String, dynamic> paymentData) async {
+  static Future<ApiResponse> getReports() async {
     try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/payment/trial/verify'),
-        headers: headers,
-        body: jsonEncode(paymentData),
+      await _loadToken();
+      final response = await http.get(
+        Uri.parse('$baseUrl/reports'),
+        headers: await _getHeaders(requireAuth: true),
       ).timeout(const Duration(seconds: 30));
       
       Map<String, dynamic> data;
@@ -489,92 +587,7 @@ class ApiClient {
       } else {
         try {
           final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-          data = {'error': errorData['message'] ?? 'Payment verification failed'};
-        } catch (e) {
-          data = {'error': _getErrorMessage(response.statusCode)};
-        }
-      }
-      
-      return ApiResponse(statusCode: response.statusCode, data: data);
-    } catch (e) {
-      return ApiResponse(
-        statusCode: 500, 
-        data: {'error': 'Network error. Please check your connection.'}
-      );
-    }
-  }
-
-  static Future<ApiResponse> createSubscription() async {
-    try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/payment/subscription/create'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 30));
-      
-      Map<String, dynamic> data;
-      
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        try {
-          data = jsonDecode(response.body) as Map<String, dynamic>;
-        } catch (e) {
-          data = {'error': 'Invalid response format'};
-        }
-      } else {
-        try {
-          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-          data = {'error': errorData['message'] ?? 'Failed to create subscription'};
-        } catch (e) {
-          data = {'error': _getErrorMessage(response.statusCode)};
-        }
-      }
-      
-      return ApiResponse(statusCode: response.statusCode, data: data);
-    } catch (e) {
-      return ApiResponse(
-        statusCode: 500, 
-        data: {'error': 'Network error. Please check your connection.'}
-      );
-    }
-  }
-
-  static Future<ApiResponse> verifySubscription(Map<String, dynamic> subscriptionData) async {
-    try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      };
-      
-      if (_authToken != null) {
-        headers['Authorization'] = 'Bearer $_authToken';
-      }
-      
-      final response = await http.post(
-        Uri.parse('$baseUrl/payment/subscription/verify'),
-        headers: headers,
-        body: jsonEncode(subscriptionData),
-      ).timeout(const Duration(seconds: 30));
-      
-      Map<String, dynamic> data;
-      
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        try {
-          data = jsonDecode(response.body) as Map<String, dynamic>;
-        } catch (e) {
-          data = {'error': 'Invalid response format'};
-        }
-      } else {
-        try {
-          final errorData = jsonDecode(response.body) as Map<String, dynamic>;
-          data = {'error': errorData['message'] ?? 'Subscription verification failed'};
+          data = {'error': errorData['message'] ?? 'Failed to get reports'};
         } catch (e) {
           data = {'error': _getErrorMessage(response.statusCode)};
         }

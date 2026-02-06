@@ -108,34 +108,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       final response = await ApiClient.verifyOtp(widget.mobileNumber, _otpController.text);
       
       if (response.statusCode == 200) {
-        // After successful OTP verification, get app status
-        final statusResponse = await ApiClient.getAppStatus();
-        if (statusResponse.statusCode == 200) {
-          final data = statusResponse.data['data'] as Map<String, dynamic>;
-          final isOnboarded = data['is_onboarded'] as bool;
-          final subscriptionStatus = data['subscription_status'] as String?;
-          
-          if (!isOnboarded) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const IntroScreen()),
-            );
-          } else if (subscriptionStatus == 'trial' || subscriptionStatus == 'active') {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const RakhiChatScreen()),
-            );
-          } else {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const PaymentScreen()),
-            );
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to get app status')),
-          );
-        }
+        _handleOtpVerificationSuccess(response.data);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: ${response.data['error']}')),
@@ -147,6 +120,33 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  void _handleOtpVerificationSuccess(Map<String, dynamic> response) {
+    final data = response['data'];
+    final bool isOnboarded = data['is_onboarded'] ?? false;
+    final String subscriptionStatus = data['subscription_status'] ?? 'none';
+    
+    // Route based on user status
+    if (!isOnboarded) {
+      // NEW USER - Start onboarding flow
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const IntroScreen()),
+      );
+    } else if (subscriptionStatus == 'active' || subscriptionStatus == 'trial') {
+      // EXISTING USER WITH ACTIVE SUBSCRIPTION - Go to chat
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const RakhiChatScreen()),
+      );
+    } else {
+      // EXISTING USER WITH EXPIRED/NO SUBSCRIPTION - Go to payment
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const PaymentScreen()),
+      );
     }
   }
 }

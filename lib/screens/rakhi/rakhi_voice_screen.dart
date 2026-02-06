@@ -44,7 +44,7 @@ class _RakhiVoiceScreenState extends State<RakhiVoiceScreen>
 
   Future<void> _startCall() async {
     try {
-      final response = await ApiClient.startVoiceCall();
+      final response = await ApiClient.startVoiceCall({});
       if (response.statusCode == 200) {
         setState(() => _isConnecting = false);
       } else {

@@ -21,7 +21,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
     try {
       if (widget.isTrial) {
         // Trial payment flow
-        final orderResponse = await ApiClient.createTrialOrder();
+        final orderResponse = await ApiClient.createTrialOrder({});
         if (orderResponse.statusCode == 200) {
           await _simulateRazorpayPayment(orderResponse.data);
         } else {
@@ -29,7 +29,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         }
       } else {
         // Subscription payment flow
-        final subscriptionResponse = await ApiClient.createSubscription();
+        final subscriptionResponse = await ApiClient.createSubscription({});
         if (subscriptionResponse.statusCode == 200) {
           await _simulateRazorpaySubscription(subscriptionResponse.data);
         } else {

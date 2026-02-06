@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:rakhi_app/core/constants/app_colors.dart';
 import 'package:rakhi_app/core/api/api_client.dart';
 import 'package:rakhi_app/screens/rakhi/rakhi_voice_screen.dart';
+import 'package:rakhi_app/screens/reports/my_reports_screen.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ChatMessage {
   final String text;
@@ -21,15 +23,41 @@ class RakhiChatScreen extends StatefulWidget {
 class _RakhiChatScreenState extends State<RakhiChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final List<ChatMessage> _messages = [];
+  final ImagePicker _picker = ImagePicker();
   bool _isLoading = false;
 
-  Future<void> _sendMessage() async {
+  Future<void> _pickImage() async {
+    try {
+      final XFile? image = await _picker.pickImage(source: ImageSource.camera);
+      if (image != null) {
+        setState(() => _isLoading = true);
+        
+        final uploadResponse = await ApiClient.uploadImage(image.path);
+        if (uploadResponse.statusCode == 200) {
+          final imageId = uploadResponse.data['image_id'];
+          await _sendMessage(imageId: imageId);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to upload image: ${uploadResponse.data['error']}')),
+          );
+        }
+        setState(() => _isLoading = false);
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error picking image: $e')),
+      );
+    }
+  }
+
+  Future<void> _sendMessage({int? imageId}) async {
     final message = _messageController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && imageId == null) return;
 
     setState(() {
       _messages.add(ChatMessage(
-        text: message,
+        text: message.isEmpty ? 'Image sent' : message,
         isUser: true,
         timestamp: DateTime.now(),
       ));
@@ -40,7 +68,7 @@ class _RakhiChatScreenState extends State<RakhiChatScreen> {
 
     try {
       print('DEBUG: Sending message: "$message"');
-      final response = await ApiClient.sendChatMessage(message);
+      final response = await ApiClient.sendChatMessage(message, imageId: imageId);
       
       print('DEBUG: Chat response status: ${response.statusCode}');
       print('DEBUG: Chat response data: ${response.data}');
@@ -49,8 +77,8 @@ class _RakhiChatScreenState extends State<RakhiChatScreen> {
       String replyText;
       
       if (response.statusCode == 200) {
-        if (response.data.containsKey('reply')) {
-          replyText = response.data['reply'];
+        if (response.data.containsKey('data') && response.data['data'].containsKey('reply')) {
+          replyText = response.data['data']['reply'];
           print('DEBUG: Found reply: "$replyText"');
         } else {
           replyText = 'API Response: ${response.data.toString()}';
@@ -101,6 +129,31 @@ class _RakhiChatScreenState extends State<RakhiChatScreen> {
               );
             },
             icon: const Icon(Icons.call, color: AppColors.white),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: AppColors.white),
+            onSelected: (value) {
+              if (value == 'reports') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MyReportsScreen(),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'reports',
+                child: Row(
+                  children: [
+                    Icon(Icons.description, color: AppColors.primary),
+                    SizedBox(width: 12),
+                    Text('My Reports'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -163,6 +216,10 @@ class _RakhiChatScreenState extends State<RakhiChatScreen> {
       ),
       child: Row(
         children: [
+          IconButton(
+            onPressed: _pickImage,
+            icon: const Icon(Icons.camera_alt, color: AppColors.primary),
+          ),
           Expanded(
             child: TextField(
               controller: _messageController,
@@ -181,7 +238,7 @@ class _RakhiChatScreenState extends State<RakhiChatScreen> {
           ),
           const SizedBox(width: 12),
           FloatingActionButton(
-            onPressed: _sendMessage,
+            onPressed: () => _sendMessage(),
             backgroundColor: AppColors.primary,
             mini: true,
             child: const Icon(Icons.send, color: AppColors.white),
